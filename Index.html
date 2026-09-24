@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestor de Clientes & GPS</title>
+  <style>
+    :root {
+      --primary: #1a73e8;
+      --bg: #f8f9fa;
+      --card: #ffffff;
+      --text: #202124;
+      --subtext: #5f6368;
+      --danger: #d93025;
+      --success: #1e8e3e;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); padding: 16px; padding-bottom: 80px; }
+    header { margin-bottom: 20px; }
+    h1 { font-size: 1.4rem; color: var(--primary); }
+    .card { background: var(--card); border-radius: 12px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 4px; color: var(--subtext); }
+    input { width: 100%; padding: 10px; border: 1px solid #dadce0; border-radius: 8px; margin-bottom: 12px; font-size: 1rem; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; text-decoration: none; gap: 8px; }
+    .btn-primary { background: var(--primary); color: white; margin-top: 4px; }
+    .btn-secondary { background: #e8f0fe; color: var(--primary); margin-bottom: 12px; }
+    .btn-maps { background: var(--success); color: white; padding: 10px; font-size: 0.9rem; }
+    .btn-delete { background: transparent; color: var(--danger); border: 1px solid var(--danger); padding: 8px; font-size: 0.8rem; margin-top: 8px; }
+    .client-item { border-bottom: 1px solid #eee; padding-bottom: 14px; margin-bottom: 14px; }
+    .client-item:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+    .coords-tag { font-family: monospace; font-size: 0.85rem; color: var(--subtext); margin: 4px 0 10px; }
+    .search-box { margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Clientes & Rotas GPS</h1>
+  </header>
+
+  <!-- Formulário de Registo -->
+  <section class="card">
+    <h2 style="font-size: 1.1rem; margin-bottom: 12px;">Novo Cliente</h2>
+    
+    <label for="name">Nome do Cliente / Empresa</label>
+    <input type="text" id="name" placeholder="Ex: Café Central" required>
+
+    <label for="coords">Coordenadas (Latitude, Longitude)</label>
+    <input type="text" id="coords" placeholder="Ex: 38.7139, -9.1394" required>
+
+    <button type="button" class="btn btn-secondary" onclick="capturarLocalizacaoAtual()">
+      📍 Usar Localização Atual
+    </button>
+
+    <button type="button" class="btn btn-primary" onclick="guardarCliente()">
+      Gravar Cliente
+    </button>
+  </section>
+
+  <!-- Lista de Clientes -->
+  <section class="card">
+    <div class="search-box">
+      <input type="text" id="search" placeholder="🔍 Procurar cliente..." oninput="renderizarClientes()">
+    </div>
+    <div id="clients-list"></div>
+  </section>
+
+  <script>
+    const STORAGE_KEY = 'gps_clients_data';
+
+    function obterClientes() {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    }
+
+    function gravarLista(lista) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(lista));
+      renderizarClientes();
+    }
+
+    function capturarLocalizacaoAtual() {
+      if (!navigator.geolocation) {
+        alert("Geolocalização não suportada no teu navegador.");
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          document.getElementById('coords').value = `${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`;
+        },
+        () => alert("Erro ao obter localização. Verifica as permissões de GPS no telemóvel."),
+        { enableHighAccuracy: true }
+      );
+    }
+
+    function guardarCliente() {
+      const name = document.getElementById('name').value.trim();
+      const coords = document.getElementById('coords').value.trim();
+
+      if (!name || !coords) {
+        alert("Preenche o nome e as coordenadas.");
+        return;
+      }
+
+      const lista = obterClientes();
+      lista.unshift({ id: Date.now(), name, coords });
+      gravarLista(lista);
+
+      document.getElementById('name').value = '';
+      document.getElementById('coords').value = '';
+    }
+
+    function eliminarCliente(id) {
+      if (confirm("Tens a certeza que queres remover este cliente?")) {
+        const lista = obterClientes().filter(c => c.id !== id);
+        gravarLista(lista);
+      }
+    }
+
+    function renderizarClientes() {
+      const termo = document.getElementById('search').value.toLowerCase();
+      const lista = obterClientes().filter(c => c.name.toLowerCase().includes(termo));
+      const container = document.getElementById('clients-list');
+
+      if (lista.length === 0) {
+        container.innerHTML = '<p style="color: var(--subtext); text-align: center; padding: 10px;">Nenhum cliente registado.</p>';
+        return;
+      }
+
+      container.innerHTML = lista.map(c => `
+        <div class="client-item">
+          <strong>${c.name}</strong>
+          <div class="coords-tag">📍 ${c.coords}</div>
+          <a class="btn btn-maps" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(c.coords)}" target="_blank">
+            Abrir no Google Maps
+          </a>
+          <button class="btn btn-delete" onclick="eliminarCliente(${c.id})">Remover</button>
+        </div>
+      `).join('');
+    }
+
+    // Inicialização
+    renderizarClientes();
+  </script>
+</body>
+</html>
